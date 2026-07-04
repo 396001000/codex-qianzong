@@ -161,3 +161,12 @@ export interface DetectionPaths {
   stateDbPath?: string | null;
   appLogDir: string;
 }
+
+export interface CodexConfigBackup {
+  id: string;
+  label: string;
+  createdAt: string;
+  isDefault: boolean;
+  hasConfig: boolean;
+  hasAuth: boolean;
+}

@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { defaultSettings, mockSnapshot } from "./mock";
-import type { AppSettings, DetectionPaths, TaskBoard, UsageSnapshot } from "../types/usage";
+import type {
+  AppSettings,
+  CodexConfigBackup,
+  DetectionPaths,
+  TaskBoard,
+  UsageSnapshot,
+} from "../types/usage";
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -41,6 +47,33 @@ export function getDetectionPaths(): Promise<DetectionPaths> {
     stateDbPath: "~/.codex/state_5.sqlite",
     appLogDir: "logs",
   });
+}
+
+const mockBackups: CodexConfigBackup[] = [
+  {
+    id: "default-initial",
+    label: "首次启动默认配置",
+    createdAt: new Date().toISOString(),
+    isDefault: true,
+    hasConfig: true,
+    hasAuth: true,
+  },
+];
+
+export function listCodexConfigBackups(): Promise<CodexConfigBackup[]> {
+  return call("list_codex_config_backups", undefined, mockBackups);
+}
+
+export function createCodexConfigBackup(label?: string): Promise<CodexConfigBackup[]> {
+  return call("create_codex_config_backup", { label }, mockBackups);
+}
+
+export function restoreCodexConfigBackup(id: string): Promise<CodexConfigBackup[]> {
+  return call("restore_codex_config_backup", { id }, mockBackups);
+}
+
+export function deleteCodexConfigBackup(id: string): Promise<CodexConfigBackup[]> {
+  return call("delete_codex_config_backup", { id }, mockBackups);
 }
 
 export function openLogFolder(): Promise<string> {

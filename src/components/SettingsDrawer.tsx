@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
-import { getDetectionPaths } from "../lib/api";
+import { RotateCcw, Save, Trash2, X } from "lucide-react";
+import {
+  createCodexConfigBackup,
+  deleteCodexConfigBackup,
+  getDetectionPaths,
+  listCodexConfigBackups,
+  restoreCodexConfigBackup,
+} from "../lib/api";
 import type {
   ApiSpeedMode,
   AppSettings,
   CodexAccessMode,
+  CodexConfigBackup,
   DetectionPaths,
   LanguageMode,
   ReasoningEffort,
@@ -20,12 +27,30 @@ interface SettingsDrawerProps {
 export function SettingsDrawer({ settings, onClose, onSave }: SettingsDrawerProps) {
   const [draft, setDraft] = useState(settings);
   const [paths, setPaths] = useState<DetectionPaths | null>(null);
+  const [backups, setBackups] = useState<CodexConfigBackup[]>([]);
+  const [selectedBackupId, setSelectedBackupId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isBackupBusy, setIsBackupBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const selectedBackup = backups.find((backup) => backup.id === selectedBackupId) ?? null;
 
   useEffect(() => {
     void getDetectionPaths().then(setPaths);
+    void refreshBackups();
   }, []);
+
+  async function refreshBackups() {
+    try {
+      const next = await listCodexConfigBackups();
+      setBackups(next);
+      setSelectedBackupId((current) =>
+        current && next.some((backup) => backup.id === current) ? current : next[0]?.id || "",
+      );
+    } catch (err) {
+      setBackupStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   async function handleSave() {
     setIsSaving(true);
@@ -36,6 +61,55 @@ export function SettingsDrawer({ settings, onClose, onSave }: SettingsDrawerProp
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
       setIsSaving(false);
+    }
+  }
+
+  async function handleCreateBackup() {
+    setIsBackupBusy(true);
+    setSaveError(null);
+    setBackupStatus(null);
+    try {
+      const next = await createCodexConfigBackup();
+      setBackups(next);
+      setSelectedBackupId(next[0]?.id || "");
+      setBackupStatus("已保存当前 Codex 配置备份");
+    } catch (err) {
+      setBackupStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsBackupBusy(false);
+    }
+  }
+
+  async function handleRestoreBackup() {
+    if (!selectedBackupId) return;
+    setIsBackupBusy(true);
+    setSaveError(null);
+    setBackupStatus(null);
+    try {
+      const next = await restoreCodexConfigBackup(selectedBackupId);
+      setBackups(next);
+      setBackupStatus("已恢复所选 Codex 配置备份，建议重启 Codex");
+    } catch (err) {
+      setBackupStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsBackupBusy(false);
+    }
+  }
+
+  async function handleDeleteBackup() {
+    if (!selectedBackupId || selectedBackup?.isDefault) return;
+    setIsBackupBusy(true);
+    setSaveError(null);
+    setBackupStatus(null);
+    try {
+      const next = await deleteCodexConfigBackup(selectedBackupId);
+      setBackups(next);
+      setSelectedBackupId(next[0]?.id || "");
+      setBackupStatus("已删除所选配置备份");
+    } catch (err) {
+      setBackupStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsBackupBusy(false);
     }
   }
 
@@ -52,6 +126,61 @@ export function SettingsDrawer({ settings, onClose, onSave }: SettingsDrawerProp
 
       <section className="settings-section" aria-label="接入方式">
         <h3>接入方式</h3>
+        <div className="config-backup-panel">
+          <label>
+            配置备份
+            <select
+              value={selectedBackupId}
+              onChange={(event) => setSelectedBackupId(event.target.value)}
+              disabled={isBackupBusy || backups.length === 0}
+            >
+              {backups.length === 0 ? (
+                <option value="">暂无备份</option>
+              ) : (
+                backups.map((backup) => (
+                  <option key={backup.id} value={backup.id}>
+                    {backup.isDefault ? "默认配置 - " : ""}
+                    {backup.label}
+                    {backup.createdAt ? ` · ${formatBackupTime(backup.createdAt)}` : ""}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <div className="config-backup-actions">
+            <button
+              className="quiet-button"
+              type="button"
+              disabled={isBackupBusy}
+              onClick={() => void handleCreateBackup()}
+            >
+              <Save size={14} />
+              保存备份
+            </button>
+            <button
+              className="quiet-button"
+              type="button"
+              disabled={isBackupBusy || !selectedBackupId}
+              onClick={() => void handleRestoreBackup()}
+            >
+              <RotateCcw size={14} />
+              恢复备份
+            </button>
+            <button
+              className="quiet-button danger-button"
+              type="button"
+              disabled={isBackupBusy || !selectedBackupId || !!selectedBackup?.isDefault}
+              onClick={() => void handleDeleteBackup()}
+            >
+              <Trash2 size={14} />
+              删除备份
+            </button>
+          </div>
+          <p className="settings-hint">
+            首次启动会自动保存默认配置；恢复前会额外保存当前配置，避免误恢复后无法回退。
+          </p>
+          {backupStatus && <p className="settings-backup-status">{backupStatus}</p>}
+        </div>
         <label>
           当前模式
           <select
@@ -293,4 +422,15 @@ function normalizeApiEndpoint(value: string): string | null {
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   const canonical = withScheme.replace(/(?:\/v1)+$/i, "/v1");
   return /\/v1$/i.test(canonical) ? canonical : `${canonical}/v1`;
+}
+
+function formatBackupTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }

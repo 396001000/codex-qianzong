@@ -44,6 +44,10 @@ Important models:
 | `refresh_task_board`  | Lightweight task board refresh                                                 |
 | `get_app_settings`    | Read persisted app settings                                                    |
 | `save_app_settings`   | Persist settings, sync Codex config, clamp refresh interval to 30-3600 seconds |
+| `list_codex_config_backups` | Return metadata for managed Codex config/auth backup snapshots |
+| `create_codex_config_backup` | Save the current Codex `config.toml` and `auth.json` snapshot, returning the refreshed backup list |
+| `restore_codex_config_backup` | Restore a selected managed snapshot after timestamp-backing up the current Codex files |
+| `delete_codex_config_backup` | Delete a selected non-default managed backup directory and return the refreshed backup list |
 | `get_detection_paths` | Return detected Codex executable, data dir, DB, and log dir                    |
 | `open_log_folder`     | Open app log folder using OS shell                                             |
 | `get_skill_board`     | Return local Codex Skills metadata for the isolated Skills board               |
@@ -72,6 +76,7 @@ Important models:
 - `AppSettings.apiKey` is accepted by `save_app_settings` for writing Codex `auth.json` and is not serialized into the app `settings.json` response/storage.
 - Saving API relay mode updates the user Codex `config.toml` with `model_provider = "qianzong_relay"`, `[model_providers.qianzong_relay]`, `base_url`, `wire_api = "responses"`, `preferred_auth_method = "apikey"`, and the selected model/reasoning/speed fields. It also updates Codex `auth.json` with `auth_mode = "apikey"` and `OPENAI_API_KEY`; if the UI leaves API Key empty, an existing non-empty `OPENAI_API_KEY` is preserved, otherwise save fails.
 - Saving official native mode edits the current Codex `config.toml` in place: it removes the qianzong relay provider shape, clears relay-only settings (`apiEndpoint`, one-time `apiKey`, relay model/reasoning/speed choices), and restores official ChatGPT auth defaults while preserving unrelated current config sections such as project paths/trust records and MCP servers. It must not restore from an old whole-file snapshot because that can drop newer Codex-managed records. It also sets Codex `auth.json` to `auth_mode = "chatgpt"` and clears `OPENAI_API_KEY`.
+- The desktop app creates one `default-initial` managed backup of Codex `config.toml` and `auth.json` on first startup before later access-mode synchronization can rewrite those files. The settings drawer can create manual managed backups, select them from a dropdown, restore them, and delete non-default backups. Restore first creates timestamped backups of the current files, then copies backed-up files back; if a file did not exist in the selected snapshot, restoring that snapshot removes the current file to match the original state. `default-initial` is protected and cannot be deleted.
 - `AppSettings.membershipStartedOn` is an optional `YYYY-MM-DD` original membership open date used only for current billing-cycle value calculation. Invalid or empty dates are normalized to `null`.
 - `ReasoningEffort.extreme` maps to Codex `model_reasoning_effort = "xhigh"`. `ApiSpeedMode.fast` maps to `service_tier = "priority"`; stable/balanced remove the forced service tier.
 - Skills board IPC returns `SkillBoard` / `SkillSummary` from `src-tauri/src/skills_board/`. The frontend passes only `skillId`; Rust rescans and resolves the path before any filesystem operation.

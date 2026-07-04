@@ -376,3 +376,14 @@ pub struct DetectionPaths {
     pub state_db_path: Option<String>,
     pub app_log_dir: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexConfigBackup {
+    pub id: String,
+    pub label: String,
+    pub created_at: String,
+    pub is_default: bool,
+    pub has_config: bool,
+    pub has_auth: bool,
+}

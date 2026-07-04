@@ -13,9 +13,10 @@ mod skills_board;
 mod snapshot;
 
 use commands::{
-    archive_skill, disable_skill, enable_skill, get_app_settings, get_detection_paths,
-    get_skill_board, get_usage_snapshot, open_log_folder, open_skill_folder, refresh_task_board,
-    save_app_settings, set_always_on_top,
+    archive_skill, create_codex_config_backup, delete_codex_config_backup, disable_skill,
+    enable_skill, get_app_settings, get_detection_paths, get_skill_board, get_usage_snapshot,
+    list_codex_config_backups, open_log_folder, open_skill_folder, refresh_task_board,
+    restore_codex_config_backup, save_app_settings, set_always_on_top,
 };
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -42,6 +43,10 @@ pub fn run() {
             save_app_settings,
             set_always_on_top,
             get_detection_paths,
+            list_codex_config_backups,
+            create_codex_config_backup,
+            restore_codex_config_backup,
+            delete_codex_config_backup,
             open_log_folder,
             get_skill_board,
             disable_skill,
@@ -50,6 +55,9 @@ pub fn run() {
             open_skill_folder
         ])
         .setup(|app| {
+            if let Err(err) = crate::codex_config::ensure_default_codex_config_backup() {
+                eprintln!("保存 Codex 默认配置备份失败: {err}");
+            }
             setup_tray(app)?;
             setup_shortcut(app)?;
             Ok(())

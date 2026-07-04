@@ -38,6 +38,10 @@ Stable commands:
 - `refresh_task_board`
 - `get_app_settings`
 - `save_app_settings`
+- `list_codex_config_backups`
+- `create_codex_config_backup`
+- `restore_codex_config_backup`
+- `delete_codex_config_backup`
 - `get_detection_paths`
 - `open_log_folder`
 
@@ -61,4 +65,4 @@ Command return values are serializable Rust structs that mirror the TypeScript t
 - Global shortcut permissions are declared in Tauri capabilities.
 - Borderless window dragging, minimize, and close use the Tauri window API and require explicit `core:window:*` permissions in `src-tauri/capabilities/default.json`.
 - API relay settings store endpoint, model, reasoning effort, and speed only. Do not store API keys or secrets in the current plain JSON settings file or generated Codex config.
-- Saving settings rewrites the user Codex config only through `src-tauri/src/codex_config.rs`, with a restore snapshot and timestamped backups. The UI never receives raw config contents.
+- Saving settings rewrites the user Codex config only through `src-tauri/src/codex_config.rs`, with a first-run default snapshot, restore snapshot, and timestamped backups. The settings UI can list, create, and restore named backup metadata, but it never receives raw config or auth contents.

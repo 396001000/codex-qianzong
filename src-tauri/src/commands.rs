@@ -1,10 +1,15 @@
 use crate::{
-    codex_config::sync_codex_config,
+    codex_config::{
+        create_codex_config_backup as create_config_backup,
+        delete_codex_config_backup as delete_config_backup,
+        list_codex_config_backups as list_config_backups,
+        restore_codex_config_backup as restore_config_backup, sync_codex_config,
+    },
     error::{AppError, AppResult},
     local_db::read_task_board,
     models::{
-        ApiSpeedMode, AppSettings, CodexAccessMode, DetectionPaths, ReasoningEffort, TaskBoard,
-        UsageSnapshot,
+        ApiSpeedMode, AppSettings, CodexAccessMode, CodexConfigBackup, DetectionPaths,
+        ReasoningEffort, TaskBoard, UsageSnapshot,
     },
     paths::{app_log_dir, detect_codex_data_dir, detect_state_db},
     settings::{detection_paths, read_settings, write_settings},
@@ -114,6 +119,36 @@ pub async fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> AppResul
 #[tauri::command]
 pub async fn get_detection_paths() -> AppResult<DetectionPaths> {
     Ok(detection_paths())
+}
+
+#[tauri::command]
+pub async fn list_codex_config_backups() -> AppResult<Vec<CodexConfigBackup>> {
+    tauri::async_runtime::spawn_blocking(list_config_backups)
+        .await
+        .map_err(|err| AppError::Process(format!("后台读取配置备份失败: {err}")))?
+}
+
+#[tauri::command]
+pub async fn create_codex_config_backup(
+    label: Option<String>,
+) -> AppResult<Vec<CodexConfigBackup>> {
+    tauri::async_runtime::spawn_blocking(move || create_config_backup(label))
+        .await
+        .map_err(|err| AppError::Process(format!("后台保存配置备份失败: {err}")))?
+}
+
+#[tauri::command]
+pub async fn restore_codex_config_backup(id: String) -> AppResult<Vec<CodexConfigBackup>> {
+    tauri::async_runtime::spawn_blocking(move || restore_config_backup(&id))
+        .await
+        .map_err(|err| AppError::Process(format!("后台恢复配置备份失败: {err}")))?
+}
+
+#[tauri::command]
+pub async fn delete_codex_config_backup(id: String) -> AppResult<Vec<CodexConfigBackup>> {
+    tauri::async_runtime::spawn_blocking(move || delete_config_backup(&id))
+        .await
+        .map_err(|err| AppError::Process(format!("后台删除配置备份失败: {err}")))?
 }
 
 #[tauri::command]

@@ -1,9 +1,10 @@
 use crate::{
     error::{AppError, AppResult},
-    models::{ApiSpeedMode, AppSettings, CodexAccessMode, ReasoningEffort},
+    models::{ApiSpeedMode, AppSettings, CodexAccessMode, CodexConfigBackup, ReasoningEffort},
     paths,
 };
 use chrono::Local;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     fs,
@@ -13,11 +14,25 @@ use toml_edit::{value, DocumentMut, Item, Table};
 
 const RELAY_PROVIDER_ID: &str = "qianzong_relay";
 const OFFICIAL_MODEL: &str = "gpt-5.5";
+const DEFAULT_BACKUP_ID: &str = "default-initial";
+const DEFAULT_BACKUP_LABEL: &str = "首次启动默认配置";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexConfigBackupManifest {
+    id: String,
+    label: String,
+    created_at: String,
+    is_default: bool,
+    has_config: bool,
+    has_auth: bool,
+}
 
 pub fn sync_codex_config(settings: &AppSettings) -> AppResult<()> {
     let config_path = codex_config_path()?;
     let auth_path = codex_auth_path()?;
     let restore_path = restore_snapshot_path()?;
+    ensure_default_backup_for_paths(&config_path, &auth_path)?;
     sync_codex_config_for_paths(settings, &config_path, &auth_path, &restore_path)
 }
 
@@ -69,6 +84,206 @@ fn sync_codex_config_for_paths(
     sync_codex_auth_for_path(settings, auth_path)?;
 
     Ok(())
+}
+
+pub fn ensure_default_codex_config_backup() -> AppResult<()> {
+    let config_path = codex_config_path()?;
+    let auth_path = codex_auth_path()?;
+    ensure_default_backup_for_paths(&config_path, &auth_path)
+}
+
+pub fn list_codex_config_backups() -> AppResult<Vec<CodexConfigBackup>> {
+    ensure_default_codex_config_backup()?;
+    let mut backups = read_backup_manifests()?;
+    backups.sort_by(|a, b| {
+        b.is_default
+            .cmp(&a.is_default)
+            .then_with(|| b.created_at.cmp(&a.created_at))
+    });
+    Ok(backups)
+}
+
+pub fn create_codex_config_backup(label: Option<String>) -> AppResult<Vec<CodexConfigBackup>> {
+    let config_path = codex_config_path()?;
+    let auth_path = codex_auth_path()?;
+    let timestamp = Local::now().format("%Y%m%d%H%M%S%3f").to_string();
+    let label = label
+        .and_then(|value| {
+            let trimmed = value.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        })
+        .unwrap_or_else(|| format!("手动备份 {}", Local::now().format("%Y-%m-%d %H:%M:%S")));
+    create_backup_snapshot(
+        &format!("manual-{timestamp}"),
+        &label,
+        false,
+        &config_path,
+        &auth_path,
+    )?;
+    list_codex_config_backups()
+}
+
+pub fn restore_codex_config_backup(id: &str) -> AppResult<Vec<CodexConfigBackup>> {
+    let backup_dir = backup_dir_for_id(id)?;
+    let manifest = read_backup_manifest(&backup_dir)?;
+    let config_path = codex_config_path()?;
+    let auth_path = codex_auth_path()?;
+
+    restore_snapshot_entry(
+        &backup_dir.join("config.toml"),
+        &config_path,
+        "config.toml",
+        manifest.has_config,
+    )?;
+    restore_snapshot_entry(
+        &backup_dir.join("auth.json"),
+        &auth_path,
+        "auth.json",
+        manifest.has_auth,
+    )?;
+
+    list_codex_config_backups()
+}
+
+pub fn delete_codex_config_backup(id: &str) -> AppResult<Vec<CodexConfigBackup>> {
+    let backup_dir = backup_dir_for_id(id)?;
+    let manifest = read_backup_manifest(&backup_dir)?;
+    if manifest.is_default || manifest.id == DEFAULT_BACKUP_ID {
+        return Err(AppError::Config("默认配置备份不能删除".into()));
+    }
+    fs::remove_dir_all(backup_dir)?;
+    list_codex_config_backups()
+}
+
+fn ensure_default_backup_for_paths(config_path: &Path, auth_path: &Path) -> AppResult<()> {
+    let backup_dir = backup_dir_for_id(DEFAULT_BACKUP_ID)?;
+    if backup_dir.join("manifest.json").exists() {
+        return Ok(());
+    }
+    create_backup_snapshot(
+        DEFAULT_BACKUP_ID,
+        DEFAULT_BACKUP_LABEL,
+        true,
+        config_path,
+        auth_path,
+    )
+}
+
+fn backup_root_dir() -> AppResult<PathBuf> {
+    let app_dir = paths::app_log_dir()?
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    Ok(app_dir.join("codex-config-backups"))
+}
+
+fn backup_dir_for_id(id: &str) -> AppResult<PathBuf> {
+    if !id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err(AppError::Config("备份 ID 不合法".into()));
+    }
+    Ok(backup_root_dir()?.join(id))
+}
+
+fn create_backup_snapshot(
+    id: &str,
+    label: &str,
+    is_default: bool,
+    config_path: &Path,
+    auth_path: &Path,
+) -> AppResult<()> {
+    let backup_dir = backup_dir_for_id(id)?;
+    fs::create_dir_all(&backup_dir)?;
+
+    let has_config = copy_if_exists(config_path, &backup_dir.join("config.toml"))?;
+    let has_auth = copy_if_exists(auth_path, &backup_dir.join("auth.json"))?;
+    let manifest = CodexConfigBackupManifest {
+        id: id.to_string(),
+        label: label.to_string(),
+        created_at: Local::now().to_rfc3339(),
+        is_default,
+        has_config,
+        has_auth,
+    };
+    let manifest_text = serde_json::to_string_pretty(&manifest)?;
+    fs::write(
+        backup_dir.join("manifest.json"),
+        format!("{manifest_text}\n"),
+    )?;
+    Ok(())
+}
+
+fn copy_if_exists(source: &Path, target: &Path) -> AppResult<bool> {
+    if !source.exists() {
+        return Ok(false);
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(source, target)?;
+    Ok(true)
+}
+
+fn restore_backup_file(source: &Path, target: &Path) -> AppResult<()> {
+    if !source.exists() {
+        return Err(AppError::Config("备份文件缺失，无法恢复".into()));
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(source, target)?;
+    Ok(())
+}
+
+fn restore_snapshot_entry(
+    source: &Path,
+    target: &Path,
+    base_name: &str,
+    existed_in_backup: bool,
+) -> AppResult<()> {
+    backup_existing_file(target, base_name)?;
+    if existed_in_backup {
+        restore_backup_file(source, target)
+    } else {
+        match fs::remove_file(target) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+
+fn read_backup_manifests() -> AppResult<Vec<CodexConfigBackup>> {
+    let root = backup_root_dir()?;
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut backups = Vec::new();
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        if let Ok(manifest) = read_backup_manifest(&entry.path()) {
+            backups.push(CodexConfigBackup {
+                id: manifest.id,
+                label: manifest.label,
+                created_at: manifest.created_at,
+                is_default: manifest.is_default,
+                has_config: manifest.has_config,
+                has_auth: manifest.has_auth,
+            });
+        }
+    }
+    Ok(backups)
+}
+
+fn read_backup_manifest(backup_dir: &Path) -> AppResult<CodexConfigBackupManifest> {
+    let text = fs::read_to_string(backup_dir.join("manifest.json"))?;
+    serde_json::from_str(&text).map_err(|err| AppError::Config(format!("备份清单解析失败: {err}")))
 }
 
 fn read_optional_text(path: &Path) -> AppResult<String> {
@@ -495,6 +710,34 @@ service_tier = "priority"
 
         let auth = fs::read_to_string(&auth_path).unwrap();
         assert!(auth.contains(r#""OPENAI_API_KEY": "sk-existing""#));
+    }
+
+    #[test]
+    fn restore_entry_removes_current_file_when_backup_recorded_absence() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("config.toml");
+        fs::write(&target, "model = \"relay\"\n").unwrap();
+
+        restore_snapshot_entry(
+            &temp.path().join("missing.toml"),
+            &target,
+            "config.toml",
+            false,
+        )
+        .unwrap();
+
+        assert!(!target.exists());
+        assert!(temp.path().read_dir().unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("qianzong-backup")));
+    }
+
+    #[test]
+    fn backup_id_validation_rejects_path_traversal() {
+        let err = backup_dir_for_id("../manual").unwrap_err();
+        assert!(err.to_string().contains("备份 ID 不合法"));
     }
 
     #[test]
