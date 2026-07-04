@@ -69,6 +69,10 @@ pub fn get_skill_board() -> AppResult<SkillBoard> {
 
 pub fn disable_skill(skill_id: &str) -> AppResult<SkillBoard> {
     let roots = default_roots()?;
+    disable_skill_with_roots(&roots, skill_id)
+}
+
+fn disable_skill_with_roots(roots: &SkillRoots, skill_id: &str) -> AppResult<SkillBoard> {
     let skill = resolve_actionable_skill(&roots, skill_id)?;
     if !skill.can_disable {
         return Err(AppError::Config("该技能不允许禁用".to_string()));
@@ -82,6 +86,10 @@ pub fn disable_skill(skill_id: &str) -> AppResult<SkillBoard> {
 
 pub fn enable_skill(skill_id: &str) -> AppResult<SkillBoard> {
     let roots = default_roots()?;
+    enable_skill_with_roots(&roots, skill_id)
+}
+
+fn enable_skill_with_roots(roots: &SkillRoots, skill_id: &str) -> AppResult<SkillBoard> {
     let skill = resolve_existing_skill(&roots, skill_id)?;
     if !skill.can_enable {
         return Err(AppError::Config("该技能不允许启用".to_string()));
@@ -578,5 +586,34 @@ mod tests {
 
         assert!(destination.join("SKILL.md").exists());
         assert!(!disabled_dir.exists());
+    }
+
+    #[test]
+    fn disables_then_enables_user_skill_roundtrip() {
+        let temp = tempdir().unwrap();
+        let roots = test_roots(temp.path());
+        write_skill(&roots.skills, "demo", "Demo description");
+
+        let disabled_board = disable_skill_with_roots(&roots, "user:demo").unwrap();
+        assert!(roots.disabled.join("demo").join("SKILL.md").exists());
+        assert!(!roots.skills.join("demo").exists());
+        let disabled_skill = disabled_board
+            .skills
+            .iter()
+            .find(|skill| skill.id == "disabled:demo")
+            .unwrap();
+        assert!(disabled_skill.can_enable);
+        assert!(!disabled_skill.can_disable);
+
+        let enabled_board = enable_skill_with_roots(&roots, "disabled:demo").unwrap();
+        assert!(roots.skills.join("demo").join("SKILL.md").exists());
+        assert!(!roots.disabled.join("demo").exists());
+        let enabled_skill = enabled_board
+            .skills
+            .iter()
+            .find(|skill| skill.id == "user:demo")
+            .unwrap();
+        assert!(enabled_skill.can_disable);
+        assert!(!enabled_skill.can_enable);
     }
 }

@@ -38,4 +38,37 @@ describe("SettingsDrawer", () => {
     );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
+
+  it("clears relay fields when switching back to official mode", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SettingsDrawer
+        settings={{
+          ...defaultSettings,
+          accessMode: "relay",
+          apiEndpoint: "https://api.example.com/v1",
+          apiKey: "sk-test",
+          apiModel: "relay-model",
+          reasoningEffort: "extreme",
+          speedMode: "fast",
+        }}
+        onClose={() => {}}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("当前模式"), { target: { value: "official" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessMode: "official",
+        apiEndpoint: null,
+        apiKey: null,
+        apiModel: "gpt-5",
+        reasoningEffort: "medium",
+        speedMode: "balanced",
+      }),
+    );
+  });
 });

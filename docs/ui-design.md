@@ -50,13 +50,13 @@ The first screen is the product. There is no landing page. The dashboard is opti
 - `LoginStatusCard` occupies the right side of the 7-day trend row and summarizes official native login vs API relay mode, endpoint, model, reasoning effort, and speed.
 - The login card settings button opens the same settings drawer; access settings are grouped near the top of the drawer.
 - The settings drawer header should stay compact. Do not show the old explanatory subtitle `接入方式、路径、刷新频率、主题与任务看板行为`.
-- Official native mode shows only the mode selector and official-mode hint. Relay-only fields are hidden because official mode uses Codex defaults.
+- Official native mode shows only the mode selector and official-mode hint. Relay-only fields are hidden and reset on save because official mode uses Codex defaults.
 - API relay mode shows API address, API Key, model name, reasoning effort, and speed strategy. The API address input accepts a base URL and normalizes it to exactly one trailing `/v1` when edited or saved. API Key is a password input; it is used for Codex `auth.json` sync and is not read back into the UI. API relay dashboard statistics are local because some users work without official login.
 - The settings drawer save button must persist settings, close the drawer on success, and keep the drawer open with an inline error on failure. The drawer must not show a log button.
 - The borderless title bar includes icon-only refresh, settings, minimize, and close controls.
 - The visible full-width board under the trend/login row is the Skills board, not the old task board. It is implemented under `src/features/skills-board/`, uses a left skill list and right description pane, and all text/actions remain Chinese.
 - Skills board shows only skill names, source/status, paths, and descriptions. It must not render full `SKILL.md` bodies. Delete/disable actions are disabled for system, plugin, protected, and already-disabled skills.
-- Skills board search area includes status filters: `全部`, `已启动`, and `已禁用`. Disabled skills from `.codex/skills-disabled` must appear under `已禁用`, expose an enable action, and return to the enabled list after enabling.
+- Skills board search area includes status filters: `全部`, `已启用`, and `已禁用`. Disabled skills from `.codex/skills-disabled` must appear under `已禁用`, expose an enable action, and return to the enabled list after enabling. Disable and enable actions are reversible and run without a blocking browser confirmation dialog. Disabling keeps the current filter in place. Skill state buttons use green for currently enabled skills and red for currently disabled skills so mixed lists are easy to scan.
 - Skills board header includes a Google Translate toggle left of refresh. `翻译` translates the selected skill description to Chinese; `取消翻译` restores the original description without changing files.
 - Settings dropdown options must stay readable in dark and light themes; native option backgrounds should not become white text on white background.
 - Reasoning/speed controls must show their current effective scope. Relay mode save synchronizes model, endpoint, reasoning, and speed to Codex config.

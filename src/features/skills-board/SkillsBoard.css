@@ -186,16 +186,40 @@
   background: rgba(94, 140, 255, 0.16);
 }
 
-.skills-board-action.success:hover:not(:disabled) {
+.skills-board-action.state-enabled:not(:disabled) {
+  color: #35d073;
+  border-color: rgba(30, 215, 96, 0.42);
+  background: rgba(30, 215, 96, 0.12);
+}
+
+.skills-board-action.state-enabled:hover:not(:disabled) {
   color: white;
   border-color: rgba(30, 215, 96, 0.45);
   background: rgba(30, 215, 96, 0.58);
 }
 
+.skills-board-action.state-disabled:not(:disabled) {
+  color: #ff6b61;
+  border-color: rgba(255, 69, 58, 0.42);
+  background: rgba(255, 69, 58, 0.12);
+}
+
+.skills-board-action.state-disabled:hover:not(:disabled) {
+  color: white;
+  border-color: rgba(255, 69, 58, 0.55);
+  background: rgba(255, 69, 58, 0.72);
+}
+
+.skills-board-action.danger:not(:disabled) {
+  color: #ff6b61;
+  border-color: rgba(255, 69, 58, 0.42);
+  background: rgba(255, 69, 58, 0.12);
+}
+
 .skills-board-action.danger:hover:not(:disabled) {
   color: white;
-  border-color: rgba(255, 69, 58, 0.45);
-  background: rgba(255, 69, 58, 0.68);
+  border-color: rgba(255, 69, 58, 0.55);
+  background: rgba(255, 69, 58, 0.72);
 }
 
 .skills-board-action:disabled {

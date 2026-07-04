@@ -2,7 +2,10 @@ use crate::{
     codex_config::sync_codex_config,
     error::{AppError, AppResult},
     local_db::read_task_board,
-    models::{AppSettings, DetectionPaths, TaskBoard, UsageSnapshot},
+    models::{
+        ApiSpeedMode, AppSettings, CodexAccessMode, DetectionPaths, ReasoningEffort, TaskBoard,
+        UsageSnapshot,
+    },
     paths::{app_log_dir, detect_codex_data_dir, detect_state_db},
     settings::{detection_paths, read_settings, write_settings},
     skills_board::{get_skill_board as load_skill_board, SkillBoard},
@@ -73,17 +76,29 @@ pub async fn get_app_settings() -> AppResult<AppSettings> {
 
 #[tauri::command]
 pub async fn save_app_settings(settings: AppSettings) -> AppResult<AppSettings> {
-    let mut settings = settings;
-    settings.refresh_interval_secs = settings.refresh_interval_secs.clamp(30, 3600);
-    settings.codex_binary_path = normalize_optional_string(settings.codex_binary_path);
-    settings.codex_data_dir = normalize_optional_string(settings.codex_data_dir);
-    settings.api_endpoint = normalize_api_endpoint(settings.api_endpoint);
-    settings.api_key = normalize_optional_string(settings.api_key);
-    settings.api_model = normalize_required_string(&settings.api_model, "gpt-5");
-    settings.membership_started_on = normalize_date_string(settings.membership_started_on);
+    let mut settings = normalize_settings_for_save(settings);
     sync_codex_config(&settings)?;
     settings.api_key = None;
     write_settings(&settings)
+}
+
+fn normalize_settings_for_save(mut settings: AppSettings) -> AppSettings {
+    settings.refresh_interval_secs = settings.refresh_interval_secs.clamp(30, 3600);
+    settings.codex_binary_path = normalize_optional_string(settings.codex_binary_path);
+    settings.codex_data_dir = normalize_optional_string(settings.codex_data_dir);
+    if settings.access_mode == CodexAccessMode::Official {
+        settings.api_endpoint = None;
+        settings.api_key = None;
+        settings.api_model = "gpt-5".to_string();
+        settings.reasoning_effort = ReasoningEffort::Medium;
+        settings.speed_mode = ApiSpeedMode::Balanced;
+    } else {
+        settings.api_endpoint = normalize_api_endpoint(settings.api_endpoint);
+        settings.api_key = normalize_optional_string(settings.api_key);
+        settings.api_model = normalize_required_string(&settings.api_model, "gpt-5");
+    }
+    settings.membership_started_on = normalize_date_string(settings.membership_started_on);
+    settings
 }
 
 #[tauri::command]
@@ -186,5 +201,27 @@ mod tests {
             Some("https://api.example.com/v1")
         );
         assert_eq!(normalize_api_endpoint(Some("   ".to_string())), None);
+    }
+
+    #[test]
+    fn official_settings_clear_relay_fields_before_save() {
+        let settings = AppSettings {
+            access_mode: CodexAccessMode::Official,
+            api_endpoint: Some("https://api.example.com/v1".to_string()),
+            api_key: Some("sk-test".to_string()),
+            api_model: "relay-model".to_string(),
+            reasoning_effort: ReasoningEffort::Extreme,
+            speed_mode: ApiSpeedMode::Fast,
+            ..AppSettings::default()
+        };
+
+        let normalized = normalize_settings_for_save(settings);
+
+        assert_eq!(normalized.access_mode, CodexAccessMode::Official);
+        assert_eq!(normalized.api_endpoint, None);
+        assert_eq!(normalized.api_key, None);
+        assert_eq!(normalized.api_model, "gpt-5");
+        assert_eq!(normalized.reasoning_effort, ReasoningEffort::Medium);
+        assert_eq!(normalized.speed_mode, ApiSpeedMode::Balanced);
     }
 }

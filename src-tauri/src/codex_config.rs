@@ -46,7 +46,6 @@ fn sync_codex_config_for_paths(
     restore_path: &Path,
 ) -> AppResult<()> {
     let original = read_optional_text(config_path)?;
-    let restore_exists = restore_path.exists();
 
     let next_text = match settings.access_mode {
         CodexAccessMode::Relay => {
@@ -56,13 +55,8 @@ fn sync_codex_config_for_paths(
             doc.to_string()
         }
         CodexAccessMode::Official => {
-            let base = if restore_exists {
-                read_optional_text(restore_path)?
-            } else {
-                original.clone()
-            };
-            let mut doc = parse_config(&base)?;
-            apply_official_config(&mut doc, is_qianzong_managed(&original) && !restore_exists);
+            let mut doc = parse_config(&original)?;
+            apply_official_config(&mut doc);
             doc.to_string()
         }
     };
@@ -217,13 +211,11 @@ fn apply_relay_config(doc: &mut DocumentMut, settings: &AppSettings) -> AppResul
     Ok(())
 }
 
-fn apply_official_config(doc: &mut DocumentMut, remove_service_tier: bool) {
+fn apply_official_config(doc: &mut DocumentMut) {
     let root = doc.as_table_mut();
     root.remove("model_provider");
     root.remove("openai_base_url");
-    if remove_service_tier {
-        root.remove("service_tier");
-    }
+    root.remove("service_tier");
     root.insert("model", value(OFFICIAL_MODEL));
     root.insert("model_reasoning_effort", value("medium"));
     root.insert("preferred_auth_method", value("chatgpt"));
@@ -355,6 +347,12 @@ service_tier = "priority"
 name = "qianzong_relay"
 base_url = "https://api.example.com/v1"
 wire_api = "responses"
+
+[mcp_servers.current]
+command = "node"
+
+[projects."/Users/mac/project-a"]
+trust_level = "trusted"
 "#,
         )
         .unwrap();
@@ -364,8 +362,8 @@ wire_api = "responses"
 preferred_auth_method = "chatgpt"
 service_tier = "priority"
 
-[mcp_servers.keep]
-command = "node"
+[mcp_servers.stale_restore]
+command = "stale"
 "#,
         )
         .unwrap();
@@ -386,8 +384,11 @@ command = "node"
         assert!(text.contains(r#"model = "gpt-5.5""#));
         assert!(text.contains(r#"preferred_auth_method = "chatgpt""#));
         assert!(text.contains(r#"model_reasoning_effort = "medium""#));
-        assert!(text.contains(r#"[mcp_servers.keep]"#));
-        assert!(text.contains(r#"service_tier = "priority""#));
+        assert!(text.contains(r#"[mcp_servers.current]"#));
+        assert!(text.contains(r#"[projects."/Users/mac/project-a"]"#));
+        assert!(text.contains(r#"trust_level = "trusted""#));
+        assert!(!text.contains("stale_restore"));
+        assert!(!text.contains("service_tier"));
         assert!(!text.contains("qianzong_relay"));
         assert!(!text.contains("model_provider"));
         let auth = fs::read_to_string(&auth_path).unwrap();
@@ -426,6 +427,7 @@ service_tier = "priority"
         let text = fs::read_to_string(&config_path).unwrap();
         assert!(text.contains(r#"preferred_auth_method = "chatgpt""#));
         assert!(!text.contains(r#"preferred_auth_method = "apikey""#));
+        assert!(!text.contains("service_tier"));
         let auth = fs::read_to_string(&auth_path).unwrap();
         assert!(auth.contains(r#""auth_mode": "chatgpt""#));
     }

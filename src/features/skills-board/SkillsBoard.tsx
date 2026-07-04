@@ -16,7 +16,7 @@ interface SkillsBoardProps {
 }
 
 const statusLabel: Record<SkillSummary["status"], string> = {
-  enabled: "启用中",
+  enabled: "已启用",
   disabled: "已禁用",
   readOnly: "只读",
 };
@@ -187,7 +187,7 @@ export function SkillsBoard({ enabled }: SkillsBoardProps) {
               />
               <FilterButton
                 active={filter === "enabled"}
-                label="已启动"
+                label="已启用"
                 count={enabledCount}
                 onClick={() => setFilter("enabled")}
               />
@@ -214,11 +214,9 @@ export function SkillsBoard({ enabled }: SkillsBoardProps) {
                     onSelect={() => setSelectedId(skill.id)}
                     onOpenFolder={() => void runAction(() => openSkillFolder(skill.id))}
                     onDisable={() => {
-                      if (!window.confirm(`确认禁用技能“${skill.name}”？`)) return;
                       void runAction(() => disableSkill(skill.id));
                     }}
                     onEnable={() => {
-                      if (!window.confirm(`确认启用技能“${skill.name}”？`)) return;
                       void runAction(async () => {
                         const result = await enableSkill(skill.id);
                         setFilter("enabled");
@@ -331,7 +329,7 @@ function SkillListItem({
         {canEnable ? (
           <button
             type="button"
-            className="skills-board-action success"
+            className="skills-board-action state-disabled"
             title={skill.canEnable ? "启用" : "不可启用"}
             aria-label={`启用 ${skill.name}`}
             disabled={disabled || !skill.canEnable}
@@ -342,7 +340,7 @@ function SkillListItem({
         ) : (
           <button
             type="button"
-            className="skills-board-action"
+            className="skills-board-action state-enabled"
             title={skill.canDisable ? "禁用" : "不可禁用"}
             aria-label={`禁用 ${skill.name}`}
             disabled={disabled || !skill.canDisable}

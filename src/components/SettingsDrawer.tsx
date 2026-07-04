@@ -57,7 +57,7 @@ export function SettingsDrawer({ settings, onClose, onSave }: SettingsDrawerProp
           <select
             value={draft.accessMode}
             onChange={(event) =>
-              setDraft({ ...draft, accessMode: event.target.value as CodexAccessMode })
+              setDraft(applyAccessMode(draft, event.target.value as CodexAccessMode))
             }
           >
             <option value="official">官方原生</option>
@@ -270,6 +270,21 @@ function accessModeHint(mode: CodexAccessMode): string {
     return "填写基础 API 地址和 API Key；保存时会自动补全为单个 /v1，并同步 Codex 配置和认证文件。";
   }
   return "官方原生模式不需要 API 地址；保存设置会恢复 Codex 官方登录配置。切换后建议重启 Codex。";
+}
+
+function applyAccessMode(settings: AppSettings, accessMode: CodexAccessMode): AppSettings {
+  if (accessMode === "official") {
+    return {
+      ...settings,
+      accessMode,
+      apiEndpoint: null,
+      apiKey: null,
+      apiModel: "gpt-5",
+      reasoningEffort: "medium",
+      speedMode: "balanced",
+    };
+  }
+  return { ...settings, accessMode };
 }
 
 function normalizeApiEndpoint(value: string): string | null {

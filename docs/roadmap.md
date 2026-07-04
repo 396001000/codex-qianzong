@@ -18,7 +18,7 @@
 
 ## Current Scope
 
-- Keep development mode running and usable on Windows.
+- Keep development mode running and usable on macOS.
 - Improve Chinese dashboard UI and settings ergonomics.
 - Use official Codex account/app-server data for quota and trend displays; use local JSONL `token_count` details for value displays.
 - Keep refresh responsive while still parsing local JSONL for token-value cards; official usage remains the primary source for account-level trend buckets.
@@ -26,6 +26,6 @@
 
 ## Deferred
 
-- Windows and macOS installer packaging.
+- Signed/notarized macOS packaging and Windows installer packaging.
 - API key storage or secret-management UI for relay providers.
 - Full project memory initialization directories and evidence index.
